@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import RoomConfig from "@/types/room-config";
 
 type RoomState = {
   roomCode: string;
@@ -27,12 +28,8 @@ type APIKEYActions = {
   updateAPIKEY: (APIKEY: APIKEYState["google_maps_api_key"]) => void;
 };
 
-type StreetviewState = {
-  panningGesturesEnabled: boolean;
-  streetNamesEnabled: boolean;
-  zoomGesturesEnabled: boolean;
-  userNavigationEnabled: boolean;
-};
+// Streetview settings are shared across the room
+type StreetviewState = RoomConfig;
 
 type AudioState = {
   markerAudioEnabled: boolean;
@@ -62,6 +59,8 @@ type StreetviewStateAction = {
   setUserNavigationEnabled: (
     userNaviagtionEnabled: StreetviewState["userNavigationEnabled"],
   ) => void;
+  applyRoomConfig: (config: Partial<RoomConfig>) => void;
+  setRoomConfig: (config: Partial<RoomConfig>) => void;
 };
 
 type UserState = {
@@ -113,11 +112,15 @@ export const RoomSettingsActions: RoomStateAction = {
   updateRoomCode: (roomCode: string) => useRoomSettings.setState({ roomCode }),
 };
 
-export const useStreetviewSettings = create<StreetviewState>()(() => ({
+const defaultRoomConfig: RoomConfig = {
   panningGesturesEnabled: true,
   streetNamesEnabled: false,
   zoomGesturesEnabled: true,
   userNavigationEnabled: true,
+};
+
+export const useStreetviewSettings = create<StreetviewState>()(() => ({
+  ...defaultRoomConfig,
 }));
 
 export const StreetviewStateActions: StreetviewStateAction = {
@@ -135,6 +138,17 @@ export const StreetviewStateActions: StreetviewStateAction = {
 
   setUserNavigationEnabled: (userNavigationEnabled: boolean) => {
     useStreetviewSettings.setState({ userNavigationEnabled });
+  },
+
+  // Merges a local change into the current settings
+  applyRoomConfig: (config: Partial<RoomConfig>) => {
+    useStreetviewSettings.setState(config);
+  },
+
+  // Replaces the settings with the room's config from the server, which only holds
+  // settings someone has changed, so anything missing is still the default
+  setRoomConfig: (config: Partial<RoomConfig>) => {
+    useStreetviewSettings.setState({ ...defaultRoomConfig, ...config });
   },
 };
 

@@ -28,11 +28,13 @@ import PlayerScore from "@/types/player-score";
 import {
   useSettingsState,
   settingsStateActions,
+  StreetviewStateActions,
 } from "@/store/useSettingsStore";
 import PlayerData from "@/types/player-data";
 import PlayerLeave from "@/types/player-leave";
 import { AutoDismissAlert } from "./AlertManager";
 import NotificationItem from "@/types/notification-item";
+import RoomConfig from "@/types/room-config";
 
 export const GameView = () => {
   const [panoId, setPanoId] = useState<string | undefined>(undefined);
@@ -128,6 +130,11 @@ export const GameView = () => {
       ]);
 
       refreshPlayerList.emit();
+    });
+
+    es.current.addEventListener("config-update", (event) => {
+      const roomConfig: Partial<RoomConfig> = JSON.parse(event.data);
+      StreetviewStateActions.setRoomConfig(roomConfig);
     });
   }, []);
 
