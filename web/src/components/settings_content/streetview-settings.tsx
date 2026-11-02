@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 // Zustand
 import { StreetviewStateActions } from "@/store/useSettingsStore";
 import { useStreetviewSettings } from "@/store/useSettingsStore";
+import RoomConfig from "@/types/room-config";
 import { useShallow } from "zustand/shallow";
 import { settingsStateActions } from "@/store/useSettingsStore";
 
@@ -12,6 +13,25 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const StreetviewSettings = () => {
+  // Apply locally for responsiveness, then share with the room (echoed back via `config-update`).
+  // Only the changed setting is sent so simultaneous edits by other players aren't overwritten.
+  const handleConfigRequest = (change: Partial<RoomConfig>) => {
+    StreetviewStateActions.applyRoomConfig(change);
+    fetch("/api/config", {
+      method: "POST",
+      body: JSON.stringify(change),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.log(`Room config update failed status: ${response.status}`);
+        }
+      })
+      .catch((error) => console.log(error));
+  };
+
   const { panning, streetNames, zooming, navigation } = useStreetviewSettings(
     useShallow((state) => ({
       panning: state.panningGesturesEnabled,
@@ -38,7 +58,9 @@ const StreetviewSettings = () => {
         <Label htmlFor="panningGesturesEnabled">Panning Gestures</Label>
         <Switch
           checked={panning}
-          onCheckedChange={StreetviewStateActions.setPanningGesturesEnabled}
+          onCheckedChange={(panningGesturesEnabled) =>
+            handleConfigRequest({ panningGesturesEnabled })
+          }
           id="panningGesturesEnabled"
         />
       </div>
@@ -48,7 +70,9 @@ const StreetviewSettings = () => {
         <Label htmlFor="streetNamesEnabled">Street Names</Label>
         <Switch
           checked={streetNames}
-          onCheckedChange={StreetviewStateActions.setStreetNamesEnabled}
+          onCheckedChange={(streetNamesEnabled) =>
+            handleConfigRequest({ streetNamesEnabled })
+          }
           id="streetNamesEnabled"
         />
       </div>
@@ -57,7 +81,9 @@ const StreetviewSettings = () => {
         <Label htmlFor="zoomGesturesEnabled">Zoom Gestures</Label>
         <Switch
           checked={zooming}
-          onCheckedChange={StreetviewStateActions.setZoomGesturesEnabled}
+          onCheckedChange={(zoomGesturesEnabled) =>
+            handleConfigRequest({ zoomGesturesEnabled })
+          }
           id="zoomGesturesEnabled"
         />
       </div>
@@ -66,7 +92,9 @@ const StreetviewSettings = () => {
         <Label htmlFor="userNavigationEnabled">User Navigation</Label>
         <Switch
           checked={navigation}
-          onCheckedChange={StreetviewStateActions.setUserNavigationEnabled}
+          onCheckedChange={(userNavigationEnabled) =>
+            handleConfigRequest({ userNavigationEnabled })
+          }
           id="userNavigationEnabled"
         />
       </div>

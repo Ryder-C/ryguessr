@@ -256,9 +256,13 @@ impl Room {
         }
     }
 
-    pub fn set_config(&mut self, config: Config) {
-        self.config = config.clone();
-        let _ = self.event_tx.send(RoomEvent::ConfigUpdate(config).into());
+    /// Merges a (possibly partial) configuration into the room's and broadcasts the merged result,
+    /// so simultaneous updates to different fields don't overwrite each other.
+    pub fn update_config(&mut self, update: Config) {
+        self.config.extra.extend(update.extra);
+        let _ = self
+            .event_tx
+            .send(RoomEvent::ConfigUpdate(self.config.clone()).into());
     }
 }
 

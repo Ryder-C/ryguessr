@@ -10,7 +10,7 @@ pub async fn config_handler(
 ) -> Result<(), StatusCode> {
     let mut model = context.model.write().await;
 
-    model.client_room_mut(&client_id)?.set_config(config);
+    model.client_room_mut(&client_id)?.update_config(config);
 
     Ok(())
 }

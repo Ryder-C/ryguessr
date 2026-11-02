@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import RoomConfig from "@/types/room-config";
 
 type RoomState = {
   roomCode: string;
@@ -27,12 +28,8 @@ type APIKEYActions = {
   updateAPIKEY: (APIKEY: APIKEYState["google_maps_api_key"]) => void;
 };
 
-type StreetviewState = {
-  panningGesturesEnabled: boolean;
-  streetNamesEnabled: boolean;
-  zoomGesturesEnabled: boolean;
-  userNavigationEnabled: boolean;
-};
+// Streetview settings are shared across the room
+type StreetviewState = RoomConfig;
 
 type AudioState = {
   markerAudioEnabled: boolean;
@@ -62,6 +59,7 @@ type StreetviewStateAction = {
   setUserNavigationEnabled: (
     userNaviagtionEnabled: StreetviewState["userNavigationEnabled"],
   ) => void;
+  applyRoomConfig: (config: Partial<RoomConfig>) => void;
 };
 
 type UserState = {
@@ -135,6 +133,11 @@ export const StreetviewStateActions: StreetviewStateAction = {
 
   setUserNavigationEnabled: (userNavigationEnabled: boolean) => {
     useStreetviewSettings.setState({ userNavigationEnabled });
+  },
+
+  // Partial so configs missing a field (e.g. from an older client) keep the current value
+  applyRoomConfig: (config: Partial<RoomConfig>) => {
+    useStreetviewSettings.setState(config);
   },
 };
 
