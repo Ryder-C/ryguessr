@@ -60,6 +60,7 @@ type StreetviewStateAction = {
     userNaviagtionEnabled: StreetviewState["userNavigationEnabled"],
   ) => void;
   applyRoomConfig: (config: Partial<RoomConfig>) => void;
+  setRoomConfig: (config: Partial<RoomConfig>) => void;
 };
 
 type UserState = {
@@ -111,11 +112,15 @@ export const RoomSettingsActions: RoomStateAction = {
   updateRoomCode: (roomCode: string) => useRoomSettings.setState({ roomCode }),
 };
 
-export const useStreetviewSettings = create<StreetviewState>()(() => ({
+const defaultRoomConfig: RoomConfig = {
   panningGesturesEnabled: true,
   streetNamesEnabled: false,
   zoomGesturesEnabled: true,
   userNavigationEnabled: true,
+};
+
+export const useStreetviewSettings = create<StreetviewState>()(() => ({
+  ...defaultRoomConfig,
 }));
 
 export const StreetviewStateActions: StreetviewStateAction = {
@@ -135,9 +140,15 @@ export const StreetviewStateActions: StreetviewStateAction = {
     useStreetviewSettings.setState({ userNavigationEnabled });
   },
 
-  // Partial so configs missing a field (e.g. from an older client) keep the current value
+  // Merges a local change into the current settings
   applyRoomConfig: (config: Partial<RoomConfig>) => {
     useStreetviewSettings.setState(config);
+  },
+
+  // Replaces the settings with the room's config from the server, which only holds
+  // settings someone has changed, so anything missing is still the default
+  setRoomConfig: (config: Partial<RoomConfig>) => {
+    useStreetviewSettings.setState({ ...defaultRoomConfig, ...config });
   },
 };
 

@@ -134,7 +134,7 @@ export const GameView = () => {
 
     es.current.addEventListener("config-update", (event) => {
       const roomConfig: Partial<RoomConfig> = JSON.parse(event.data);
-      StreetviewStateActions.applyRoomConfig(roomConfig);
+      StreetviewStateActions.setRoomConfig(roomConfig);
     });
   }, []);
 

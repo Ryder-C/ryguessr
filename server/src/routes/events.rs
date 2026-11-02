@@ -71,7 +71,11 @@ pub async fn sse_event_handler(
 
     let round = room.round;
     let pano_id = room.location.pano_id.clone();
-    let initial_event = RoomEvent::RoundStart(RoundStartData { pano_id, round });
+    let initial_events = [
+        RoomEvent::RoundStart(RoundStartData { pano_id, round }),
+        // so clients joining (or reconnecting to) a room pick up its current configuration
+        RoomEvent::ConfigUpdate(room.config().clone()),
+    ];
 
     let rx = room.event_tx.subscribe();
 
@@ -106,12 +110,14 @@ pub async fn sse_event_handler(
         session,
     };
 
-    room.event_tx
-        .send(EventEnvelope {
-            event: initial_event,
-            recipients: Recipients::only_one(client_id),
-        })
-        .unwrap();
+    for event in initial_events {
+        room.event_tx
+            .send(EventEnvelope {
+                event,
+                recipients: Recipients::only_one(client_id.clone()),
+            })
+            .unwrap();
+    }
 
     let sse = Sse::new(event_stream).keep_alive(
         KeepAlive::new()

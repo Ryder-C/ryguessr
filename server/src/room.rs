@@ -256,6 +256,11 @@ impl Room {
         }
     }
 
+    /// The room's current [configuration](Config).
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     /// Merges a (possibly partial) configuration into the room's and broadcasts the merged result,
     /// so simultaneous updates to different fields don't overwrite each other.
     pub fn update_config(&mut self, update: Config) {
