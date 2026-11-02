@@ -1,6 +1,7 @@
+import NotificationItem from "./notification-item";
+
 export default interface AlertProps {
-  title: string;
-  description: string;
+  notification: NotificationItem;
   duration?: number;
   onDismiss?: () => void;
 }

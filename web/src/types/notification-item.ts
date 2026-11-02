@@ -1,5 +1,6 @@
 export default interface NotificationItem {
   id: string;
-  title: string;
-  description: string;
+  kind: "join" | "leave";
+  username: string;
+  color?: string;
 }

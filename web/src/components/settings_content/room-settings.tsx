@@ -1,13 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import { Separator } from "../ui/separator";
-import { Item, ItemContent, ItemTitle } from "../ui/item";
-import { MapPin } from "lucide-react";
-import { Field } from "../ui/field";
+import { useState, useEffect } from "react";
+import { Check, Copy, Loader2, LogIn } from "lucide-react";
 import { Button } from "../ui/button";
-import { Input } from "@/components/ui/input";
-
-import { X } from "lucide-react";
 
 // Zustand useRoomSettings
 import {
@@ -18,216 +12,244 @@ import {
   settingsStateActions,
 } from "@/store/useSettingsStore";
 
-// Error Code enum
-import StatusCodes from "@/types/status-codes";
-
 // RoomPeek reseponse type
 import PlayerData from "@/types/player-data";
 
 // Signals
-import { useSignal, refreshPlayerList } from "@/lib/signal";
 import { refreshSseEventStream } from "@/lib/signal";
+import { useRoomPlayers } from "@/lib/useRoomPlayers";
+
+import { SectionHeader } from "./setting-row";
+
+const ROOM_CODE_LENGTH = 4;
+
+type PeekState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "found"; players: PlayerData[] }
+  | { status: "not-found" }
+  | { status: "error" };
+
+const PlayerList = ({
+  players,
+  username,
+}: {
+  players: PlayerData[];
+  username?: string;
+}) => (
+  <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-card/40">
+    {[...players]
+      .sort((a, b) => b.score - a.score)
+      .map((player) => (
+        <li
+          key={player.username}
+          className="flex items-center gap-3 px-4 py-2.5 text-sm"
+        >
+          <span
+            className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-black/80"
+            style={{ backgroundColor: player.color }}
+          >
+            {player.username.charAt(0).toUpperCase()}
+          </span>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className="truncate font-medium">{player.username}</span>
+            {player.username === username && (
+              <span className="rounded bg-primary/20 px-1.5 py-px text-[0.65rem] font-semibold uppercase tracking-wide text-primary">
+                You
+              </span>
+            )}
+          </span>
+          <span className="tabular-nums text-muted-foreground">
+            {player.score.toLocaleString()} pts
+          </span>
+        </li>
+      ))}
+  </ul>
+);
 
 const RoomSettings = () => {
   const roomCode = useRoomSettings((state) => state.roomCode);
-  const [roomCodeInput, setRoomCodeInput] = useState<string>(roomCode);
-  const [requestStatusCode, setRequestStatusCode] = useState<StatusCodes>(
-    StatusCodes.OK,
-  );
-  const [isPeeking, setIsPeeking] = useState<boolean>(false);
-  const [playerData, setPlayerData] = useState<PlayerData[]>([]);
   const username = useGameSession((state) => state.activeUsername);
+  const players = useRoomPlayers();
 
-  const roomPeek = useCallback(async (roomCode: string) => {
-    setIsPeeking(true);
-    try {
-      const response = await fetch(`api/room/${roomCode}`, {
-        method: "GET",
-      });
-      setRequestStatusCode(response.status);
-      if (!response.ok) {
-        console.log(response.status);
-        throw new Error(`Error peeking into room. Status: ${response.status} `);
-      } else {
-        const roomData: PlayerData[] = await response.json();
-        setPlayerData(roomData);
-      }
-    } catch (error) {
-      throw new Error(`Network error peeking into room: ${error}`);
-    } finally {
-      setIsPeeking(false);
-    }
-  }, []);
+  const [codeInput, setCodeInput] = useState("");
+  const [peek, setPeek] = useState<PeekState>({ status: "idle" });
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | undefined>();
+  const [copied, setCopied] = useState(false);
 
+  const isOwnRoom = codeInput === roomCode;
+
+  // Look up the typed room as soon as the code is complete
   useEffect(() => {
-    roomPeek(roomCode);
-  }, [roomPeek]);
+    setJoinError(undefined);
+    if (codeInput.length !== ROOM_CODE_LENGTH || codeInput === roomCode) {
+      setPeek({ status: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setPeek({ status: "loading" });
+    fetch(`/api/room/${codeInput}`)
+      .then(async (response) => {
+        if (cancelled) return;
+        if (response.ok) {
+          setPeek({ status: "found", players: await response.json() });
+        } else {
+          setPeek({ status: response.status === 404 ? "not-found" : "error" });
+        }
+      })
+      .catch(() => !cancelled && setPeek({ status: "error" }));
+    return () => {
+      cancelled = true;
+    };
+  }, [codeInput, roomCode]);
 
-  const handleRoomJoinRequest = async (requestedRoomCode: string) => {
+  const handleRoomJoinRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (peek.status !== "found" || joining) return;
+    setJoining(true);
     try {
-      const response = await fetch("api/join", {
+      const response = await fetch("/api/join", {
         method: "POST",
-        body: JSON.stringify(requestedRoomCode),
+        body: JSON.stringify(codeInput),
         headers: {
           "Content-Type": "application/json",
         },
       });
-      setRequestStatusCode(response.status);
       if (!response.ok) {
-        throw new Error(`Room join request failed status: ${response.status}`);
+        setJoinError(`Couldn't join that room (${response.status}).`);
+        return;
       }
       const joinResponse: PlayerData = await response.json();
       playerActions.setActiveColor(joinResponse.color);
-      RoomSettingsActions.updateRoomCode(requestedRoomCode);
+      RoomSettingsActions.updateRoomCode(codeInput);
       refreshSseEventStream.emit();
-      setRoomCodeInput(requestedRoomCode);
-      roomPeek(requestedRoomCode);
-    } catch (error) {
-      throw new Error(
-        `Network error while attempting to join a room: ${error}`,
-      );
+      setCodeInput("");
+      settingsStateActions.updateSettingsVisibility(false);
+    } catch {
+      setJoinError("Network error while joining. Try again.");
+    } finally {
+      setJoining(false);
     }
   };
 
-  const upperInput = roomCodeInput.toUpperCase();
-  const isRightLength = upperInput.length === 4;
-  const isNewRoom = upperInput !== roomCode;
-  const isRoomValid = requestStatusCode === StatusCodes.OK && !isPeeking;
-
-  const canJoinRoom = isRightLength && isNewRoom && isRoomValid;
-
-  const tryRoomCode = (roomCodeCapture: string) => {
-    const upperCode = roomCodeCapture.toUpperCase();
-    setRoomCodeInput(upperCode);
-
-    if (roomCodeCapture.length == 4) {
-      roomPeek(upperCode);
-    } else {
-      setRequestStatusCode(StatusCodes.OK);
+  const copyRoomCode = async () => {
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard needs a secure context; the code is visible anyway
     }
   };
 
-  const handleRoomCodeSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!canJoinRoom) return;
-    handleRoomJoinRequest(upperInput);
-  };
-
-  useSignal(refreshPlayerList, () => {
-    console.log("room refresh");
-    roomPeek(roomCode);
-  });
-
-  const getTextColorClass = () => {
-    if (upperInput === roomCode) return "text-green-500";
-    if (upperInput.length < 4 || isPeeking) return "text-gray-600";
-    if (requestStatusCode === StatusCodes.OK) return "text-amber-400";
-    return "text-red-400";
-  };
+  const status = (() => {
+    if (joinError) return { text: joinError, className: "text-destructive" };
+    if (isOwnRoom)
+      return {
+        text: "You're already in this room.",
+        className: "text-muted-foreground",
+      };
+    switch (peek.status) {
+      case "loading":
+        return {
+          text: "Looking for room…",
+          className: "text-muted-foreground",
+        };
+      case "found":
+        return {
+          text: `Room found · ${peek.players.length} ${peek.players.length === 1 ? "player" : "players"}`,
+          className: "text-primary",
+        };
+      case "not-found":
+        return {
+          text: "No room with that code.",
+          className: "text-destructive",
+        };
+      case "error":
+        return {
+          text: "Couldn't look up that room.",
+          className: "text-destructive",
+        };
+      default:
+        return {
+          text: "Enter a 4-character code from a friend.",
+          className: "text-muted-foreground",
+        };
+    }
+  })();
 
   return (
     <>
-      <div className="flex flex-row justify-between items-center">
-        <p className="text-xl font-semibold">Room</p>
+      <SectionHeader
+        title="Room"
+        description="Everyone in a room sees the same location each round."
+      />
+
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-primary/30 bg-primary/[0.07] p-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Your room code
+          </span>
+          <span className="font-mono text-4xl font-bold tracking-[0.25em] text-foreground">
+            {roomCode}
+          </span>
+        </div>
         <Button
-          className="bg-transparent hover:cursor-pointer"
-          onClick={() => settingsStateActions.updateSettingsVisibility(false)}
-          variant={"secondary"}
+          variant="outline"
+          onClick={copyRoomCode}
+          className="shrink-0 rounded-lg"
         >
-          <X color="white" />
+          {copied ? <Check className="text-primary" /> : <Copy />}
+          {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <Separator />
-      <form
-        className="flex flex-col gap-3 w-full"
-        onSubmit={(e) => handleRoomCodeSubmit(e)}
-      >
-        <Input
-          className={`!bg-transparent not-focus:text-6xl sm:not-focus:text-7xl tracking-wider border-none select-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-6xl sm:placeholder:text-7xl placeholder:text-white focus:text-6xl sm:focus:text-7xl font-semibold h-fit max-w-full uppercase placeholder:tracking-wider ${getTextColorClass()}`}
-          id="input-field-roomcode"
-          name="room_code"
-          type="text"
-          maxLength={4}
-          value={roomCodeInput}
-          enterKeyHint="enter"
-          onBlur={(e) => {
-            if (e.relatedTarget && e.relatedTarget.id == "join-room-button") {
-              return;
+
+      <div className="flex flex-col gap-2">
+        <h4 className="text-sm font-medium text-muted-foreground">
+          Players in this room · {players.length}
+        </h4>
+        <PlayerList players={players} username={username} />
+      </div>
+
+      <form className="flex flex-col gap-2" onSubmit={handleRoomJoinRequest}>
+        <h4 className="text-sm font-medium text-muted-foreground">
+          Join a friend&apos;s room
+        </h4>
+        <div className="flex gap-2">
+          <input
+            id="input-field-roomcode"
+            name="room_code"
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            placeholder="ABCD"
+            maxLength={ROOM_CODE_LENGTH}
+            value={codeInput}
+            enterKeyHint="go"
+            onChange={(e) =>
+              setCodeInput(
+                e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+              )
             }
-            setRoomCodeInput(roomCode);
-            setRequestStatusCode(StatusCodes.OK);
-          }}
-          onChange={(e) => tryRoomCode(e.target.value)}
-        />
-
-        <Separator />
-        <div className="flex flex-col gap-3 w-full">
-          <Field orientation="horizontal">
-            <Button
-              type={`${!canJoinRoom ? `button` : `submit`}`}
-              className={`w-full ${!canJoinRoom ? `cursor-not-allowed` : `cursor-pointer`}`}
-              id="join-room-button"
-              // Keep focus on the input so its blur handler doesn't reset the
-              // code before the click lands (Safari doesn't focus buttons).
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              Join Room
-            </Button>
-          </Field>
-          <Field orientation="horizontal">
-            <Button type="button" className="hover:cursor-pointer w-full">
-              Inactive
-            </Button>
-          </Field>
+            className="h-12 w-full min-w-0 rounded-xl border border-white/15 bg-white/[0.04] px-4 font-mono text-2xl font-semibold uppercase tracking-[0.4em] outline-none transition-colors placeholder:text-white/20 focus:border-primary/60 focus:ring-3 focus:ring-primary/20"
+          />
+          <Button
+            type="submit"
+            disabled={peek.status !== "found" || joining}
+            className="h-12 shrink-0 rounded-xl px-5 font-semibold"
+          >
+            {joining ? <Loader2 className="animate-spin" /> : <LogIn />}
+            Join
+          </Button>
         </div>
-        <Separator />
-      </form>
-
-      {!isPeeking &&
-        requestStatusCode == StatusCodes.OK &&
-        playerData.length > 0 &&
-        roomCodeInput.length == 4 && (
-          <>
-            <p className="text-lg font-medium">Players</p>
-            <Separator />
-            {playerData &&
-              playerData.map((player: PlayerData) => {
-                return (
-                  <Item
-                    variant="outline"
-                    className="flex flex-row justify-between items-center flex-wrap h-fit"
-                    key={player.username}
-                  >
-                    <div>
-                      <ItemContent
-                        key={player.username}
-                        className="flex flex-row gap-3 justify-between items-center"
-                      >
-                        <MapPin
-                          color={player.color}
-                          strokeWidth={1.5}
-                          className="text-xs sm:text-base"
-                        />
-                        <ItemTitle className="gap-1 text-xs sm:text-base">
-                          {player.username == username ? (
-                            <>
-                              {player.username}
-                              <span className="font-bold">(ME)</span>
-                            </>
-                          ) : (
-                            player.username
-                          )}
-                        </ItemTitle>
-                      </ItemContent>
-                    </div>
-                    <p className="text-gray-300 text-xs sm:text-base">
-                      {player.score}
-                    </p>
-                  </Item>
-                );
-              })}
-          </>
+        <p className={`text-xs ${status.className}`}>{status.text}</p>
+        {peek.status === "found" && peek.players.length > 0 && (
+          <PlayerList players={peek.players} />
         )}
+      </form>
     </>
   );
 };
