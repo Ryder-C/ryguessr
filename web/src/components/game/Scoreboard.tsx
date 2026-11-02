@@ -102,8 +102,12 @@ export const Scoreboard = memo(function Scoreboard({
         </div>
 
         <ol className="-mx-1 flex flex-col gap-1.5 overflow-y-auto px-1">
-          {rows.map((score, index) => {
+          {rows.map((score) => {
             const isMe = score.name === username;
+            // Tied players share a rank
+            const shown = (s: typeof score) =>
+              animateToRealScore ? s.cum_score : s.cum_score - s.last_score;
+            const rank = rows.filter((r) => shown(r) > shown(score)).length;
             return (
               <motion.li
                 layout
@@ -112,9 +116,9 @@ export const Scoreboard = memo(function Scoreboard({
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${isMe ? "bg-primary/10 ring-1 ring-primary/40" : "bg-white/[0.04]"}`}
               >
                 <span
-                  className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${RANK_STYLES[index] ?? "bg-white/10 text-muted-foreground"}`}
+                  className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${RANK_STYLES[rank] ?? "bg-white/10 text-muted-foreground"}`}
                 >
-                  {index + 1}
+                  {rank + 1}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="flex min-w-0 items-center gap-2 font-medium">

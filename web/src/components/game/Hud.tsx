@@ -32,7 +32,11 @@ export const Hud = ({ roundNumber }: { roundNumber: number }) => {
     }
   };
 
-  const shownPlayers = players.slice(0, MAX_AVATARS);
+  // You always lead the stack and sit on top of the overlap
+  const orderedPlayers = [...players].sort(
+    (a, b) => Number(b.username === username) - Number(a.username === username),
+  );
+  const shownPlayers = orderedPlayers.slice(0, MAX_AVATARS);
   const overflow = players.length - shownPlayers.length;
 
   return (
@@ -67,15 +71,18 @@ export const Hud = ({ roundNumber }: { roundNumber: number }) => {
       <div className="pointer-events-auto flex items-center gap-2">
         <button
           onClick={() => settingsStateActions.updateSettingsVisibility(true)}
-          title={players.map((p) => p.username).join(", ")}
+          title={orderedPlayers.map((p) => p.username).join(", ")}
           className="glass flex h-10 items-center gap-2 rounded-xl pl-2 pr-3 transition-colors hover:bg-background/90"
         >
           <div className="flex -space-x-1.5">
-            {shownPlayers.map((player) => (
+            {shownPlayers.map((player, index) => (
               <span
                 key={player.username}
-                className={`flex size-6 items-center justify-center rounded-full text-[0.65rem] font-bold text-black/80 ring-2 ${player.username === username ? "ring-white" : "ring-background"}`}
-                style={{ backgroundColor: player.color }}
+                className={`relative flex size-6 items-center justify-center rounded-full text-[0.65rem] font-bold text-black/80 ring-2 ${player.username === username ? "ring-white" : "ring-background"}`}
+                style={{
+                  backgroundColor: player.color,
+                  zIndex: shownPlayers.length - index,
+                }}
               >
                 {player.username.charAt(0).toUpperCase()}
               </span>

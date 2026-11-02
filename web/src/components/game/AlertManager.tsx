@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { UserMinus, UserPlus } from "lucide-react";
 import AlertProps from "@/types/alert";
 import { motion } from "framer-motion";
@@ -8,13 +8,16 @@ export function AutoDismissAlert({
   duration = 4000,
   onDismiss,
 }: AlertProps) {
+  // Keep the latest callback without restarting the timer on every parent render
+  const onDismissRef = useRef(onDismiss);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onDismiss) onDismiss();
-    }, duration);
+    onDismissRef.current = onDismiss;
+  });
 
+  useEffect(() => {
+    const timer = setTimeout(() => onDismissRef.current?.(), duration);
     return () => clearTimeout(timer);
-  }, [duration, onDismiss]);
+  }, [duration]);
 
   const joined = notification.kind === "join";
   const Icon = joined ? UserPlus : UserMinus;

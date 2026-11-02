@@ -6,6 +6,8 @@ interface MapOverlayProps {
   hasGuessed: boolean;
   showResults: boolean;
   mapExpanded: boolean;
+  /** Tap-to-expand mini map (touch / small screens) instead of hover-to-grow */
+  compact: boolean;
   /** Disables keyboard shortcuts while a dialog is open */
   inputLocked: boolean;
   handleSetMapExpanded: (mapExpanded: boolean) => void;

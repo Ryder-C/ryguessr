@@ -60,6 +60,7 @@ export const MapOverlay = memo(function MapOverlay({
   hasGuessed,
   showResults,
   mapExpanded,
+  compact,
   inputLocked,
   handleSetMapExpanded,
 }: MapOverlayProps) {
@@ -162,9 +163,11 @@ export const MapOverlay = memo(function MapOverlay({
       for (const entry of roundData.player_results) {
         bounds.extend(entry.guess_location);
       }
+      // Keep markers clear of the HUD and the result card, scaled for short screens
+      const height = mapRef.current?.getDiv().clientHeight ?? 800;
       mapRef.current?.fitBounds(bounds, {
-        top: 80,
-        bottom: 260,
+        top: Math.min(80, height * 0.2),
+        bottom: Math.min(260, height * 0.45),
         left: 48,
         right: 48,
       });
@@ -172,17 +175,17 @@ export const MapOverlay = memo(function MapOverlay({
     return () => clearTimeout(timer);
   }, [showResults, roundData]);
 
-  const collapsedOnMobile = !mapExpanded && !showResults;
+  const collapsed = compact && !mapExpanded && !showResults;
 
   return (
     <div className="flex h-full w-full flex-col gap-2">
       <div
         className={`relative z-0 w-full flex-grow overflow-hidden shadow-2xl shadow-black/50 transition-[border-radius] ${showResults ? "" : "rounded-2xl ring-1 ring-white/20"}`}
       >
-        {collapsedOnMobile && (
+        {collapsed && (
           <button
             aria-label="Open map"
-            className="absolute inset-0 z-20 flex items-end justify-start bg-transparent p-1.5 sm:hidden"
+            className="absolute inset-0 z-20 flex items-end justify-start bg-transparent p-1.5"
             onClick={(e) => {
               e.stopPropagation();
               handleSetMapExpanded(true);
@@ -190,24 +193,28 @@ export const MapOverlay = memo(function MapOverlay({
           >
             <span className="glass flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
               <MapIcon className="size-3.5" />
-              {hasGuessed ? "Map" : selectedLocation ? "Guess" : "Tap to guess"}
+              {hasGuessed
+                ? "Waiting…"
+                : selectedLocation
+                  ? "Guess"
+                  : "Tap to guess"}
             </span>
           </button>
         )}
-        {mapExpanded && !showResults && (
+        {compact && mapExpanded && !showResults && (
           <button
             aria-label="Minimize map"
             onClick={() => handleSetMapExpanded(false)}
-            className="glass absolute top-2 right-2 z-20 flex size-9 items-center justify-center rounded-lg sm:hidden"
+            className="glass absolute top-2 right-2 z-20 flex size-9 items-center justify-center rounded-lg"
           >
             <Minimize2 className="size-4" />
           </button>
         )}
-        {!selectedLocation && !hasGuessed && (
-          <div className="pointer-events-none absolute top-2 left-1/2 z-10 hidden -translate-x-1/2 sm:block">
+        {!selectedLocation && !hasGuessed && !collapsed && (
+          <div className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2">
             <span className="glass flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted-foreground whitespace-nowrap">
               <MousePointerClick className="size-3.5" />
-              Click to place your pin
+              {compact ? "Tap" : "Click"} to place your pin
             </span>
           </div>
         )}
@@ -253,7 +260,7 @@ export const MapOverlay = memo(function MapOverlay({
                   if (isCurrentUser) return null;
 
                   return (
-                    <Fragment key={entry.player.color}>
+                    <Fragment key={entry.player.username}>
                       <Marker
                         position={entry.guess_location}
                         icon={createPlayerIcon(entry.player.color)}
@@ -278,7 +285,7 @@ export const MapOverlay = memo(function MapOverlay({
       </div>
       {!showResults && (
         <Button
-          className={`h-11 w-full rounded-xl text-sm font-semibold tracking-wide shadow-lg shadow-black/40 transition-all active:scale-[0.98] disabled:border disabled:border-white/10 disabled:bg-background/75 disabled:backdrop-blur-xl ${collapsedOnMobile ? "hidden sm:inline-flex" : ""}`}
+          className={`h-11 w-full rounded-xl text-sm font-semibold tracking-wide shadow-lg shadow-black/40 transition-all active:scale-[0.98] disabled:border disabled:border-white/10 disabled:bg-background/75 disabled:backdrop-blur-xl ${collapsed ? "hidden" : ""}`}
           disabled={!selectedLocation || hasGuessed}
           onClick={submitGuess}
         >
@@ -290,7 +297,9 @@ export const MapOverlay = memo(function MapOverlay({
           ) : selectedLocation ? (
             <>
               Guess
-              <kbd className="ml-1 hidden rounded border border-black/20 bg-black/10 px-1.5 py-0.5 font-mono text-[0.65rem] font-medium sm:inline">
+              <kbd
+                className={`ml-1 rounded border border-black/20 bg-black/10 px-1.5 py-0.5 font-mono text-[0.65rem] font-medium ${compact ? "hidden" : ""}`}
+              >
                 Space
               </kbd>
             </>

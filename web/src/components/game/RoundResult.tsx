@@ -47,10 +47,10 @@ export const RoundResult = ({
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0, transition: { delay: 0.25, duration: 0.3 } }}
       exit={{ opacity: 0, y: 40, transition: { duration: 0.15 } }}
-      className="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg"
+      className="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg short:max-w-2xl"
     >
-      <div className="glass flex flex-col gap-4 rounded-2xl p-5">
-        <div className="flex items-baseline justify-between gap-3">
+      <div className="glass flex flex-col gap-4 rounded-2xl p-5 short:flex-row short:items-center short:gap-5 short:p-3 short:pl-5">
+        <div className="flex items-baseline justify-between gap-3 short:hidden">
           <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Round {roundNumber}
           </span>
@@ -58,9 +58,9 @@ export const RoundResult = ({
             {verdictText}
           </span>
         </div>
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex items-end justify-between gap-4 short:flex-1 short:items-center">
           <div className="flex flex-col">
-            <span className="text-4xl font-bold tabular-nums tracking-tight">
+            <span className="text-4xl font-bold tabular-nums tracking-tight short:text-3xl">
               <NumberFlow value={score} />
             </span>
             <span className="text-sm text-muted-foreground">points</span>
@@ -74,7 +74,7 @@ export const RoundResult = ({
             </div>
           )}
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10 short:hidden">
           <motion.div
             className="h-full rounded-full bg-gradient-to-r from-primary/70 to-primary"
             initial={{ width: 0 }}
@@ -86,7 +86,7 @@ export const RoundResult = ({
         </div>
         <Button
           onClick={onShowStandings}
-          className="h-11 w-full rounded-xl font-semibold"
+          className="h-11 w-full rounded-xl font-semibold short:w-auto short:shrink-0 short:px-5"
         >
           <Trophy />
           View standings

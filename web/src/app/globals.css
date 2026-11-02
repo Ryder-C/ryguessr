@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Landscape phones and other very short viewports */
+@custom-variant short (@media (max-height: 500px));
 
 @theme inline {
   --color-background: var(--background);

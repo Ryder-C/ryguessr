@@ -47,7 +47,9 @@ const StreetviewSettings = () => {
           label="Look around"
           description="Drag to pan the camera. Off shows a single still photo."
           checked={panning}
-          onCheckedChange={(panningGesturesEnabled) => handleConfigRequest({ panningGesturesEnabled })}
+          onCheckedChange={(panningGesturesEnabled) =>
+            handleConfigRequest({ panningGesturesEnabled })
+          }
         />
         <ToggleRow
           id="userNavigationEnabled"
@@ -55,7 +57,9 @@ const StreetviewSettings = () => {
           description="Walk down the street by clicking arrows or the road."
           checked={navigation}
           disabled={!panning}
-          onCheckedChange={(userNavigationEnabled) => handleConfigRequest({ userNavigationEnabled })}
+          onCheckedChange={(userNavigationEnabled) =>
+            handleConfigRequest({ userNavigationEnabled })
+          }
         />
         <ToggleRow
           id="zoomGesturesEnabled"
@@ -63,7 +67,9 @@ const StreetviewSettings = () => {
           description="Scroll or pinch to zoom in on details."
           checked={zooming}
           disabled={!panning}
-          onCheckedChange={(zoomGesturesEnabled) => handleConfigRequest({ zoomGesturesEnabled })}
+          onCheckedChange={(zoomGesturesEnabled) =>
+            handleConfigRequest({ zoomGesturesEnabled })
+          }
         />
         <ToggleRow
           id="streetNamesEnabled"
@@ -71,7 +77,9 @@ const StreetviewSettings = () => {
           description="Show road labels. Makes it much easier!"
           checked={streetNames}
           disabled={!panning}
-          onCheckedChange={(streetNamesEnabled) => handleConfigRequest({ streetNamesEnabled })}
+          onCheckedChange={(streetNamesEnabled) =>
+            handleConfigRequest({ streetNamesEnabled })
+          }
         />
       </SettingsGroup>
     </>

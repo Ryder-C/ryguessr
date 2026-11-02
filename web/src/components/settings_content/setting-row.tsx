@@ -40,6 +40,7 @@ export const ToggleRow = ({
     </div>
     <Switch
       id={id}
+      aria-label={label}
       checked={checked}
       disabled={disabled}
       onCheckedChange={onCheckedChange}

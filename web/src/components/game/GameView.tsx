@@ -2,13 +2,15 @@
 import Streetview from "./StreetView";
 import { MapOverlay } from "./MapOverlay";
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
-import { EventSource } from "eventsource";
+import { EventSource, type ErrorEvent } from "eventsource";
 import { Scoreboard } from "./Scoreboard";
 import Settings from "@/components/game/Settings";
 import { AnimatePresence } from "framer-motion";
 import { Hud } from "./Hud";
 import { RoundResult } from "./RoundResult";
 import { LoadingScreen } from "../initialize/loading-screen";
+import { ConnectionStatus, type Connection } from "./ConnectionStatus";
+import { COMPACT_LAYOUT_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 // Type Data
 import RoundData from "@/types/round-data";
 import ScoreData from "@/types/score-data";
@@ -48,6 +50,8 @@ export const GameView = () => {
   const [shownScoreboard, setShownScoreboard] = useState<boolean>(false);
   const [notifications, addNotifications] = useState<NotificationItem[]>([]);
   const [mapExpanded, setMapExpanded] = useState<boolean>(false);
+  const [connection, setConnection] = useState<Connection>("open");
+  const compact = useMediaQuery(COMPACT_LAYOUT_QUERY);
   const mapRef = useRef<HTMLDivElement>(null);
 
   const es = useRef<EventSource | null>(null);
@@ -108,6 +112,14 @@ export const GameView = () => {
         }),
     });
 
+    es.current.onopen = () => setConnection("open");
+    // Network blips are retried automatically; an HTTP error (e.g. 401 once the server
+    // restarts and forgets our session) closes the stream for good
+    es.current.onerror = (event: ErrorEvent) => {
+      const closed = es.current?.readyState === EventSource.CLOSED;
+      setConnection(closed || event.code ? "lost" : "reconnecting");
+    };
+
     es.current.addEventListener("round-start", (event) => {
       const round_start: RoundStart = JSON.parse(event.data);
       setPanoId(round_start.pano_id);
@@ -162,6 +174,8 @@ export const GameView = () => {
 
   const handleGuess = useCallback(async (selectedLocation: Coordinates) => {
     setHasGuessed(true);
+    // Give the street view back while waiting on everyone else
+    setMapExpanded(false);
     const response = await fetch("/api/guess", {
       method: "POST",
       body: JSON.stringify(selectedLocation),
@@ -208,12 +222,14 @@ export const GameView = () => {
   // Map container geometry for each phase of the round
   const mapContainerClass = showResults
     ? "right-0 bottom-0 w-full h-full"
-    : mapExpanded
-      ? "right-3 bottom-3 w-[calc(100%-1.5rem)] h-[70dvh] sm:right-4 sm:bottom-4 sm:w-[min(60vw,52rem)] sm:h-[min(65vh,36rem)]"
-      : "right-3 bottom-3 w-36 h-28 sm:right-4 sm:bottom-4 sm:w-[22rem] sm:h-[16rem] sm:hover:w-[min(60vw,52rem)] sm:hover:h-[min(65vh,36rem)] sm:hover:delay-0 sm:delay-300";
+    : compact
+      ? mapExpanded
+        ? "right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] w-[calc(100%-1.5rem)] h-[min(70dvh,calc(100dvh-5.5rem))]"
+        : "right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] w-36 h-28"
+      : "right-4 bottom-4 w-[22rem] h-[min(16rem,45dvh)] hover:w-[min(60vw,52rem)] hover:h-[min(65vh,36rem)] hover:delay-0 delay-300";
 
   return (
-    <main className="bg-black relative h-dvh w-full overflow-hidden select-none">
+    <main className="bg-black relative h-dvh w-full overflow-hidden">
       <div className="absolute inset-0 z-0">
         {panoId ? (
           <Streetview panoId={panoId} />
@@ -222,7 +238,7 @@ export const GameView = () => {
         )}
       </div>
 
-      {!showResults && <Hud roundNumber={displayRound} />}
+      <Hud roundNumber={displayRound} />
 
       <div className="pointer-events-none absolute inset-x-0 top-16 sm:top-20 z-50 flex flex-col items-center gap-2 px-3">
         <AnimatePresence initial={false}>
@@ -243,8 +259,9 @@ export const GameView = () => {
         className={`absolute z-10 transition-all duration-300 ease-out ${mapContainerClass}`}
       >
         <MapOverlay
-          key={`map-round${roundNumber}`}
+          key={`map-${panoId}-${roundNumber}`}
           mapExpanded={mapExpanded}
+          compact={compact}
           showResults={showResults}
           roundData={roundData}
           hasGuessed={hasGuessed}
@@ -279,6 +296,8 @@ export const GameView = () => {
       </AnimatePresence>
 
       <AnimatePresence>{settingsVisibility && <Settings />}</AnimatePresence>
+
+      <ConnectionStatus connection={connection} />
     </main>
   );
 };
