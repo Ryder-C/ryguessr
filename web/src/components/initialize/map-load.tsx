@@ -1,17 +1,19 @@
 import { useLoadScript } from "@react-google-maps/api";
 import { GameView } from "../game/GameView";
+import { LoadingScreen } from "./loading-screen";
 
 const GoogleMapLoader = ({ APIKEY }: { APIKEY: string }) => {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: APIKEY,
   });
 
-  if (loadError || !isLoaded) {
+  if (loadError) {
     return (
-      <div className="h-screen w-screen bg-black text-white flex items-center justify-center">
-        Loading UwU...
-      </div>
+      <LoadingScreen error="Google Maps failed to load. Try refreshing." />
     );
+  }
+  if (!isLoaded) {
+    return <LoadingScreen message="Loading maps…" />;
   }
   return <GameView />;
 };

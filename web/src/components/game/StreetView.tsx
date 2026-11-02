@@ -24,6 +24,9 @@ const Streetview = memo(function Streetview({ panoId }: { panoId?: string }) {
       scrollwheel: zoomGesturesEnabled,
       disableDoubleClickZoom: !zoomGesturesEnabled,
       zoomControl: zoomGesturesEnabled,
+      zoomControlOptions: {
+        position: google.maps.ControlPosition.LEFT_BOTTOM,
+      },
 
       // Default Controls
       visible: true,

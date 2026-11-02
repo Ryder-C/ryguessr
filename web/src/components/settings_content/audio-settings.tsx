@@ -1,16 +1,9 @@
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-
 // Zustand
 import { useShallow } from "zustand/shallow";
 import { audioStateActions } from "@/store/useSettingsStore";
 import { useAudioState } from "@/store/useSettingsStore";
-import { settingsStateActions } from "@/store/useSettingsStore";
 
-// ui
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { SectionHeader, SettingsGroup, ToggleRow } from "./setting-row";
 
 const AudioSettings = () => {
   const { markerAudio, lockAudio } = useAudioState(
@@ -22,36 +15,23 @@ const AudioSettings = () => {
 
   return (
     <>
-      <div className="flex flex-row justify-between items-center">
-        <p className="text-xl font-semibold">Audio</p>
-        <Button
-          className="bg-transparent hover:cursor-pointer"
-          onClick={() => settingsStateActions.updateSettingsVisibility(false)}
-          variant={"secondary"}
-        >
-          <X color="white" />
-        </Button>
-      </div>
-      <Separator />
-      <div className="flex items-center justify-between space-x-2">
-        <Label htmlFor="panningGesturesEnabled">Marker Audio</Label>
-        <Switch
+      <SectionHeader title="Sound" description="Sound effects during play." />
+      <SettingsGroup>
+        <ToggleRow
+          id="markerAudioEnabled"
+          label="Pin drop"
+          description="Play a sound when you place your pin."
           checked={markerAudio}
           onCheckedChange={audioStateActions.setMarkerAudioEnabled}
-          id="markerAudioEnabled"
         />
-      </div>
-      <Separator />
-
-      <div className="flex items-center justify-between space-x-2">
-        <Label htmlFor="streetNamesEnabled">Lock Audio</Label>
-        <Switch
+        <ToggleRow
+          id="lockAudioEnabled"
+          label="Guess locked in"
+          description="Play a sound when you submit your guess."
           checked={lockAudio}
           onCheckedChange={audioStateActions.setLockAudioEnabled}
-          id="lockAudioEnabled"
         />
-      </div>
-      <Separator />
+      </SettingsGroup>
     </>
   );
 };

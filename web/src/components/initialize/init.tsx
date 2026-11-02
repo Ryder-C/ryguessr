@@ -13,9 +13,11 @@ import {
   useAPIKEY,
 } from "@/store/useSettingsStore";
 import GoogleMapLoader from "./map-load";
+import { LoadingScreen } from "./loading-screen";
 
 export const Init = () => {
   const [responseCode, setResponseCode] = useState<number | undefined>();
+  const [error, setError] = useState<string | undefined>();
 
   const hasInitialized = useRef(false);
 
@@ -54,9 +56,15 @@ export const Init = () => {
           setResponseCode(response.status);
         } else {
           console.error("Initialization failed... status:", response.status);
+          setError(
+            `Couldn't reach the server (${response.status}). Try refreshing.`,
+          );
         }
       } catch (error) {
         console.error("Network error during init:", error);
+        setError(
+          "Couldn't reach the server. Check your connection and refresh.",
+        );
       }
     };
     initializeRyguessr();
@@ -65,8 +73,6 @@ export const Init = () => {
   return responseCode == 200 && google_maps_api_key ? (
     <GoogleMapLoader APIKEY={google_maps_api_key} />
   ) : (
-    <div className="h-screen w-screen bg-black text-white flex items-center justify-center">
-      Loading UwU...
-    </div>
+    <LoadingScreen message="Connecting…" error={error} />
   );
 };

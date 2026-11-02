@@ -9,8 +9,15 @@ import {
   Fragment,
 } from "react";
 import { GoogleMap, Marker, Polyline } from "@react-google-maps/api";
+import {
+  Loader2,
+  Map as MapIcon,
+  Minimize2,
+  MousePointerClick,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import interpolateGreatCircle from "@/lib/haversine";
+import { isConfirmKey, shouldIgnoreHotkey } from "@/lib/hotkeys";
 
 // Coordinates type
 import MapOverlayProps from "@/types/map_overlay_props";
@@ -21,15 +28,39 @@ import PlayerResults from "@/types/player-results";
 import { useGameSession } from "@/store/useSettingsStore";
 import { useAudioState } from "@/store/useSettingsStore";
 
+const pinSvg = (color: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="${color}" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3" fill="#FFFFFF"/></svg>`;
+
+const flagSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#111827" stroke="#FFFFFF" stroke-width="2.5"/><path d="M13 26V10m0 0h9l-1.5 3.5L22 17h-9" fill="#4ade80" stroke="#4ade80" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+
+const svgUrl = (svg: string) =>
+  `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+
+const dashedLine = (color: string) => ({
+  strokeColor: color,
+  strokeOpacity: 0,
+  zIndex: 10,
+  icons: [
+    {
+      icon: {
+        path: "M 0,0 0,-2",
+        strokeOpacity: 1,
+        strokeColor: color,
+        scale: 3,
+      },
+      offset: "12px",
+      repeat: "16px",
+    },
+  ],
+});
+
 export const MapOverlay = memo(function MapOverlay({
-  hasContinued,
   roundData,
   handleGuess,
   hasGuessed,
-  handleContinue,
-  shownScoreboard,
-  handleScoreboard,
+  showResults,
   mapExpanded,
+  inputLocked,
   handleSetMapExpanded,
 }: MapOverlayProps) {
   const [selectedLocation, setSelectedLocation] = useState<Coordinates | null>(
@@ -48,29 +79,25 @@ export const MapOverlay = memo(function MapOverlay({
 
   const activeIconColor = useGameSession((state) => state.activeIconColor);
 
-  const { userIconOptions, poly_color } = useMemo(() => {
-    const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="${activeIconColor}" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`;
-
-    const customIconUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgString)}`;
+  const createPlayerIcon = useCallback((color: string) => {
     return {
-      userIconOptions: {
-        width: 30,
-        height: 30,
-        url: customIconUrl,
-        anchor: new google.maps.Point(16, 30),
-        scaledSize: new window.google.maps.Size(32, 32),
-      },
-      poly_color: activeIconColor,
+      url: svgUrl(pinSvg(color)),
+      anchor: new google.maps.Point(16, 30),
+      scaledSize: new google.maps.Size(32, 32),
     };
-  }, [activeIconColor]);
+  }, []);
+
+  const userIconOptions = useMemo(
+    () => createPlayerIcon(activeIconColor),
+    [activeIconColor, createPlayerIcon],
+  );
 
   const { locationIconOptions, mapContainerStyle } = useMemo(() => {
     return {
       locationIconOptions: {
-        width: 30,
-        height: 30,
-        url: "/svg/flag.svg",
-        anchor: new google.maps.Point(6, 30),
+        url: svgUrl(flagSvg),
+        anchor: new google.maps.Point(18, 18),
+        scaledSize: new google.maps.Size(36, 36),
       },
       mapContainerStyle: { width: "100%", height: "100%" },
     };
@@ -80,12 +107,13 @@ export const MapOverlay = memo(function MapOverlay({
 
   const mapOptions = useMemo(() => {
     return {
-      draggableCursor: hasGuessed ? "move" : "crosshair",
+      draggableCursor: hasGuessed ? "grab" : "crosshair",
       disableDefaultUI: true,
       clickableIcons: false,
       gestureHandling: "greedy",
-      draggingCursor: "move",
+      draggingCursor: "grabbing",
       minZoom: 2,
+      backgroundColor: "#0f131a",
     };
   }, [hasGuessed]);
 
@@ -94,7 +122,7 @@ export const MapOverlay = memo(function MapOverlay({
       if (e.latLng) {
         setSelectedLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
       }
-      if (markerAudioEnabled) markerAudio.play();
+      if (markerAudioEnabled) markerAudio.play().catch(() => {});
     },
     [markerAudioEnabled, markerAudio],
   );
@@ -106,56 +134,82 @@ export const MapOverlay = memo(function MapOverlay({
     map.setZoom(2);
   }, []);
 
-  const handleMapPanOnGuess = () => {
-    if (!selectedLocation) return;
-    handleGuess(true, selectedLocation);
-    if (lockAudioEnabled) lockAudio.play();
-  };
+  const submitGuess = useCallback(() => {
+    if (!selectedLocation || hasGuessed) return;
+    handleGuess(selectedLocation);
+    if (lockAudioEnabled) lockAudio.play().catch(() => {});
+  }, [selectedLocation, hasGuessed, handleGuess, lockAudioEnabled, lockAudio]);
 
+  // Space / Enter locks in the guess
   useEffect(() => {
-    if (
-      hasGuessed &&
-      roundData?.real_location &&
-      selectedLocation &&
-      mapRef.current
-    ) {
-      const bounds = new window.google.maps.LatLngBounds();
-      bounds.extend(roundData.real_location);
-      bounds.extend(selectedLocation);
-      mapRef.current.fitBounds(bounds, 50);
-    }
-  }, [roundData, selectedLocation, hasGuessed]);
-
-  const createPlayerIcon = useCallback((color: string) => {
-    const svgString = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="${color}" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin">
-        <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
-        <circle cx="12" cy="10" r="3"/>
-      </svg>
-    `;
-
-    return {
-      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgString)}`,
-      anchor: window.google ? new window.google.maps.Point(15, 20) : undefined,
-      scaledSize: window.google
-        ? new window.google.maps.Size(32, 32)
-        : undefined,
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (inputLocked || showResults || shouldIgnoreHotkey(e)) return;
+      if (isConfirmKey(e)) {
+        e.preventDefault();
+        submitGuess();
+      }
     };
-  }, []);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [inputLocked, showResults, submitGuess]);
+
+  // Frame every guess and the real location once the map has grown to full screen
+  useEffect(() => {
+    if (!showResults || !roundData || !mapRef.current) return;
+    const timer = setTimeout(() => {
+      const bounds = new google.maps.LatLngBounds();
+      bounds.extend(roundData.real_location);
+      for (const entry of roundData.player_results) {
+        bounds.extend(entry.guess_location);
+      }
+      mapRef.current?.fitBounds(bounds, {
+        top: 80,
+        bottom: 260,
+        left: 48,
+        right: 48,
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [showResults, roundData]);
+
+  const collapsedOnMobile = !mapExpanded && !showResults;
 
   return (
-    <div className="flex gap-2 flex-col gap-2 h-full w-full">
+    <div className="flex h-full w-full flex-col gap-2">
       <div
-        className={`${roundData?.player_results && shownScoreboard ? "blur-sm pointer-events-none" : undefined} flex-grow w-full rounded-lg overflow-hidden border-2 shadow-xl relative z-0`}
+        className={`relative z-0 w-full flex-grow overflow-hidden shadow-2xl shadow-black/50 transition-[border-radius] ${showResults ? "" : "rounded-2xl ring-1 ring-white/20"}`}
       >
-        {!mapExpanded && (
-          <div
-            className="absolute sm:hidden inset-0 z-20 cursor-pointer bg-transparent"
+        {collapsedOnMobile && (
+          <button
+            aria-label="Open map"
+            className="absolute inset-0 z-20 flex items-end justify-start bg-transparent p-1.5 sm:hidden"
             onClick={(e) => {
               e.stopPropagation();
               handleSetMapExpanded(true);
             }}
-          />
+          >
+            <span className="glass flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium">
+              <MapIcon className="size-3.5" />
+              {hasGuessed ? "Map" : selectedLocation ? "Guess" : "Tap to guess"}
+            </span>
+          </button>
+        )}
+        {mapExpanded && !showResults && (
+          <button
+            aria-label="Minimize map"
+            onClick={() => handleSetMapExpanded(false)}
+            className="glass absolute top-2 right-2 z-20 flex size-9 items-center justify-center rounded-lg sm:hidden"
+          >
+            <Minimize2 className="size-4" />
+          </button>
+        )}
+        {!selectedLocation && !hasGuessed && (
+          <div className="pointer-events-none absolute top-2 left-1/2 z-10 hidden -translate-x-1/2 sm:block">
+            <span className="glass flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted-foreground whitespace-nowrap">
+              <MousePointerClick className="size-3.5" />
+              Click to place your pin
+            </span>
+          </div>
         )}
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
@@ -170,7 +224,7 @@ export const MapOverlay = memo(function MapOverlay({
               zIndex={50}
             />
           )}
-          {hasGuessed && selectedLocation && roundData && (
+          {showResults && selectedLocation && roundData && (
             <>
               <Marker
                 position={{
@@ -178,24 +232,10 @@ export const MapOverlay = memo(function MapOverlay({
                   lng: roundData.real_location.lng,
                 }}
                 icon={locationIconOptions}
+                zIndex={60}
               />
               <Polyline
-                options={{
-                  strokeColor: poly_color,
-                  strokeOpacity: 0,
-                  zIndex: 10,
-                  icons: [
-                    {
-                      icon: {
-                        path: "M 0,0 0,-2",
-                        strokeOpacity: 1,
-                        scale: 3,
-                      },
-                      offset: "12px",
-                      repeat: "20px",
-                    },
-                  ],
-                }}
+                options={dashedLine(activeIconColor)}
                 path={interpolateGreatCircle(
                   selectedLocation,
                   roundData.real_location,
@@ -217,6 +257,7 @@ export const MapOverlay = memo(function MapOverlay({
                       <Marker
                         position={entry.guess_location}
                         icon={createPlayerIcon(entry.player.color)}
+                        title={entry.player.username}
                       />
 
                       <Polyline
@@ -225,22 +266,7 @@ export const MapOverlay = memo(function MapOverlay({
                           roundData.real_location,
                           100,
                         )}
-                        options={{
-                          strokeColor: entry.player.color,
-                          strokeOpacity: 0,
-                          icons: [
-                            {
-                              icon: {
-                                path: "M 0,0 0,-2",
-                                strokeOpacity: 1,
-                                scale: 3,
-                                strokeColor: entry.player.color,
-                              },
-                              offset: "12px",
-                              repeat: "20px",
-                            },
-                          ],
-                        }}
+                        options={dashedLine(entry.player.color)}
                       />
                     </Fragment>
                   );
@@ -250,37 +276,29 @@ export const MapOverlay = memo(function MapOverlay({
           )}
         </GoogleMap>
       </div>
-      <div className="w-full z-10 rounded-lg bg-background transition-transform duration-150 ease-in-out active:scale-95">
+      {!showResults && (
         <Button
-          className={
-            "w-full bg-background text-white text-xs sm:text-base tracking-widest shadow-lg"
-          }
-          size={"default"}
-          variant={"outline"}
-          onClick={
-            hasContinued
-              ? undefined
-              : shownScoreboard
-                ? handleContinue
-                : hasGuessed && roundData
-                  ? handleScoreboard
-                  : selectedLocation && !hasGuessed
-                    ? handleMapPanOnGuess
-                    : undefined
-          }
+          className={`h-11 w-full rounded-xl text-sm font-semibold tracking-wide shadow-lg shadow-black/40 transition-all active:scale-[0.98] disabled:border disabled:border-white/10 disabled:bg-background/75 disabled:backdrop-blur-xl ${collapsedOnMobile ? "hidden sm:inline-flex" : ""}`}
+          disabled={!selectedLocation || hasGuessed}
+          onClick={submitGuess}
         >
-          {" "}
-          {hasContinued
-            ? "Waiting for Players..."
-            : shownScoreboard
-              ? "Continue"
-              : hasGuessed && roundData
-                ? "Show Scoreboard"
-                : hasGuessed && !roundData
-                  ? "Waiting for Players..."
-                  : "Guess"}{" "}
+          {hasGuessed ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Waiting for other players…
+            </>
+          ) : selectedLocation ? (
+            <>
+              Guess
+              <kbd className="ml-1 hidden rounded border border-black/20 bg-black/10 px-1.5 py-0.5 font-mono text-[0.65rem] font-medium sm:inline">
+                Space
+              </kbd>
+            </>
+          ) : (
+            "Place your pin on the map"
+          )}
         </Button>
-      </div>
+      )}
     </div>
   );
 });

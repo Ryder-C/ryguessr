@@ -4,17 +4,16 @@ import { MapOverlay } from "./MapOverlay";
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { EventSource } from "eventsource";
 import { Scoreboard } from "./Scoreboard";
-import { Button } from "@/components/ui/button";
 import Settings from "@/components/game/Settings";
-import { AnimatePresence, isEasingArray } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { Hud } from "./Hud";
+import { RoundResult } from "./RoundResult";
+import { LoadingScreen } from "../initialize/loading-screen";
 // Type Data
 import RoundData from "@/types/round-data";
 import ScoreData from "@/types/score-data";
 import RoundStart from "@/types/round-start";
 import Coordinates from "@/types/coordinate_type";
-
-// Lucide icons
-import { Settings2 } from "lucide-react";
 
 // Signals
 import {
@@ -27,7 +26,7 @@ import PlayerScore from "@/types/player-score";
 // Zustand
 import {
   useSettingsState,
-  settingsStateActions,
+  useGameSession,
   StreetviewStateActions,
 } from "@/store/useSettingsStore";
 import PlayerData from "@/types/player-data";
@@ -36,12 +35,16 @@ import { AutoDismissAlert } from "./AlertManager";
 import NotificationItem from "@/types/notification-item";
 import RoomConfig from "@/types/room-config";
 
+let notificationId = 0;
+
 export const GameView = () => {
   const [panoId, setPanoId] = useState<string | undefined>(undefined);
   const [hasGuessed, setHasGuessed] = useState<boolean>(false);
   const [roundData, setRoundData] = useState<RoundData | undefined>(undefined);
   const [hasContinued, setHasContinued] = useState<boolean>(false);
-  const [roundNumber, setRoundNumber] = useState<number>(1);
+  const [roundNumber, setRoundNumber] = useState<number>(0);
+  // The server counts rounds from 0
+  const displayRound = roundNumber + 1;
   const [shownScoreboard, setShownScoreboard] = useState<boolean>(false);
   const [notifications, addNotifications] = useState<NotificationItem[]>([]);
   const [mapExpanded, setMapExpanded] = useState<boolean>(false);
@@ -52,6 +55,9 @@ export const GameView = () => {
   const settingsVisibility = useSettingsState(
     (state) => state.settingsVisibility,
   );
+  const username = useGameSession((state) => state.activeUsername);
+
+  const showResults = hasGuessed && roundData !== undefined;
 
   const score_data = useMemo(() => {
     if (roundData) {
@@ -61,6 +67,7 @@ export const GameView = () => {
           name: entry.player.username,
           last_score: entry.round_score,
           cum_score: entry.player.score,
+          distance: entry.distance,
           IconColor: entry.player.color,
         });
       }
@@ -73,6 +80,19 @@ export const GameView = () => {
     }
     return null;
   }, [roundData]);
+
+  const myResult = useMemo(
+    () => roundData?.player_results.find((r) => r.player.username === username),
+    [roundData, username],
+  );
+
+  const pushNotification = useCallback(
+    (notification: Omit<NotificationItem, "id">) => {
+      const id = `${++notificationId}`;
+      addNotifications((prev) => [...prev.slice(-3), { id, ...notification }]);
+    },
+    [],
+  );
 
   const SSEConnect = useCallback(() => {
     if (es.current) {
@@ -101,34 +121,22 @@ export const GameView = () => {
 
     es.current.addEventListener("round-end", (event) => {
       const round_data = JSON.parse(event.data);
-      setMapExpanded(true);
       setRoundData(round_data);
     });
 
     es.current.addEventListener("player-joined", (event) => {
       const playerJoinData: PlayerData = JSON.parse(event.data);
-      addNotifications((prev) => [
-        ...prev,
-        {
-          id: playerJoinData.username,
-          title: "Player Join",
-          description: `${playerJoinData.username} has joined the Room!`,
-        },
-      ]);
+      pushNotification({
+        kind: "join",
+        username: playerJoinData.username,
+        color: playerJoinData.color,
+      });
       refreshPlayerList.emit();
     });
 
     es.current.addEventListener("player-left", (event) => {
       const playerLeaveData: PlayerLeave = JSON.parse(event.data);
-      addNotifications((prev) => [
-        ...prev,
-        {
-          id: playerLeaveData.username,
-          title: "Player Left",
-          description: `${playerLeaveData.username} has left the Room!`,
-        },
-      ]);
-
+      pushNotification({ kind: "leave", username: playerLeaveData.username });
       refreshPlayerList.emit();
     });
 
@@ -136,7 +144,7 @@ export const GameView = () => {
       const roomConfig: Partial<RoomConfig> = JSON.parse(event.data);
       StreetviewStateActions.setRoomConfig(roomConfig);
     });
-  }, []);
+  }, [pushNotification]);
 
   useSignal(refreshSseEventStream, () => {
     SSEConnect();
@@ -152,26 +160,22 @@ export const GameView = () => {
     };
   }, [SSEConnect]);
 
-  const handleGuess = useCallback(
-    async (guess: boolean, selectedLocation: Coordinates) => {
-      setHasGuessed(guess);
-      const response = await fetch("/api/guess", {
-        method: "POST",
-        body: JSON.stringify(selectedLocation),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        console.log(response);
-      }
-    },
-    [],
-  );
+  const handleGuess = useCallback(async (selectedLocation: Coordinates) => {
+    setHasGuessed(true);
+    const response = await fetch("/api/guess", {
+      method: "POST",
+      body: JSON.stringify(selectedLocation),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    if (!response.ok) {
+      console.log(response);
+    }
+  }, []);
 
   const handleContinue = useCallback(async () => {
     setHasContinued(true);
-    setMapExpanded(false);
     const response = await fetch("/api/next", {
       method: "POST",
       headers: {},
@@ -181,13 +185,9 @@ export const GameView = () => {
     }
   }, []);
 
-  const handleScoreboard = useCallback(() => {
-    setShownScoreboard(true);
-  }, []);
-
-  const removeNotification = (id: string) => {
+  const removeNotification = useCallback((id: string) => {
     addNotifications((prev) => prev.filter((noti) => noti.id !== id));
-  };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: PointerEvent) {
@@ -205,93 +205,80 @@ export const GameView = () => {
     };
   }, [mapExpanded]);
 
-  const handleSetMapExpanded = (mapExpanded: boolean) => {
-    setMapExpanded(mapExpanded);
-  };
+  // Map container geometry for each phase of the round
+  const mapContainerClass = showResults
+    ? "right-0 bottom-0 w-full h-full"
+    : mapExpanded
+      ? "right-3 bottom-3 w-[calc(100%-1.5rem)] h-[70dvh] sm:right-4 sm:bottom-4 sm:w-[min(60vw,52rem)] sm:h-[min(65vh,36rem)]"
+      : "right-3 bottom-3 w-36 h-28 sm:right-4 sm:bottom-4 sm:w-[22rem] sm:h-[16rem] sm:hover:w-[min(60vw,52rem)] sm:hover:h-[min(65vh,36rem)] sm:hover:delay-0 sm:delay-300";
 
   return (
-    <main className="bg-black relative h-dvh w-full overflow-hidden">
-      <div className="absolute top-5 right-5 z-[99] bg-background border-1 border-white rounded-lg transition-all duration-100 active:scale-90">
-        <Button
-          variant={"outline"}
-          onClick={() => {
-            settingsStateActions.updateSettingsVisibility(!settingsVisibility);
-          }}
-          size="icon"
-          color="black"
-          className="aspect-video origin-top-right"
-        >
-          <Settings2 color="white" />
-        </Button>
+    <main className="bg-black relative h-dvh w-full overflow-hidden select-none">
+      <div className="absolute inset-0 z-0">
+        {panoId ? (
+          <Streetview panoId={panoId} />
+        ) : (
+          <LoadingScreen message="Dropping you somewhere…" />
+        )}
       </div>
-      <div className="absolute flex flex-col gap-3 pointer-events-none top-5 left-5 z-[99] rounded-lg">
-        <AnimatePresence>
-          {notifications.map((noti, index) => {
+
+      {!showResults && <Hud roundNumber={displayRound} />}
+
+      <div className="pointer-events-none absolute inset-x-0 top-16 sm:top-20 z-50 flex flex-col items-center gap-2 px-3">
+        <AnimatePresence initial={false}>
+          {notifications.map((noti) => {
             return (
               <AutoDismissAlert
                 key={noti.id}
-                title={noti.title}
-                description={noti.description}
+                notification={noti}
                 onDismiss={() => removeNotification(noti.id)}
               />
             );
           })}
         </AnimatePresence>
       </div>
-      {settingsVisibility && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[99]">
-          <Settings />
-        </div>
-      )}
 
-      <div
-        className={`${shownScoreboard && score_data ? "blur-sm pointer-events-none" : undefined} absolute inset-0 z-0`}
-      >
-        {location ? (
-          <>
-            {mapExpanded && (
-              <div className="sm:hidden absolute inset-0 z-10 cursor-default bg-transparent" />
-            )}
-
-            <Streetview panoId={panoId} />
-          </>
-        ) : (
-          <p className="text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            Loading ....
-          </p>
-        )}
-      </div>
       <div
         ref={mapRef}
-        className={` bottom-5 left-5 flex flex-col gap-2 absolute z-10 sm:aspect-video transition-all duration-300 origin-bottom-left 
-          ${
-            roundData && !shownScoreboard
-              ? " h-[calc(100dvh-2.5rem)] w-[calc(100vw-2.5rem)] sm:max-h-[calc(100vh-2.5rem)] opacity-100 ease-out"
-              : shownScoreboard
-                ? "w-40 md:w-64 lg:w-90 opacity-90 "
-                : mapExpanded
-                  ? "w-[calc(100vw-2.5rem)] h-[50dvh] opacity-100, ease-in-out"
-                  : "w-40 h-28 sm:h-auto md:w-64 lg:w-90 opacity-90 sm:hover:w-[50vw] xl:hover:w-[50vw] ease-in-out"
-          }`}
+        className={`absolute z-10 transition-all duration-300 ease-out ${mapContainerClass}`}
       >
         <MapOverlay
           key={`map-round${roundNumber}`}
           mapExpanded={mapExpanded}
-          handleScoreboard={handleScoreboard}
-          shownScoreboard={shownScoreboard}
+          showResults={showResults}
           roundData={roundData}
-          hasContinued={hasContinued}
           hasGuessed={hasGuessed}
+          inputLocked={settingsVisibility || shownScoreboard}
           handleGuess={handleGuess}
-          handleContinue={handleContinue}
-          handleSetMapExpanded={handleSetMapExpanded}
-        />{" "}
+          handleSetMapExpanded={setMapExpanded}
+        />
       </div>
-      {score_data && shownScoreboard && (
-        <div className="overflow-hidden absolute transition-all duration-300 ease-in-out top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <Scoreboard score_data={score_data} />
-        </div>
-      )}
+
+      <AnimatePresence>
+        {showResults && !shownScoreboard && (
+          <RoundResult
+            key="round-result"
+            roundNumber={displayRound}
+            result={myResult}
+            onShowStandings={() => setShownScoreboard(true)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {score_data && shownScoreboard && (
+          <Scoreboard
+            key="scoreboard"
+            roundNumber={displayRound}
+            score_data={score_data}
+            hasContinued={hasContinued}
+            onContinue={handleContinue}
+            onClose={() => setShownScoreboard(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>{settingsVisibility && <Settings />}</AnimatePresence>
     </main>
   );
 };
