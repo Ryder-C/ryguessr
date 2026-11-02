@@ -167,6 +167,9 @@ const RoomSettings = () => {
               type={`${!canJoinRoom ? `button` : `submit`}`}
               className={`w-full ${!canJoinRoom ? `cursor-not-allowed` : `cursor-pointer`}`}
               id="join-room-button"
+              // Keep focus on the input so its blur handler doesn't reset the
+              // code before the click lands (Safari doesn't focus buttons).
+              onMouseDown={(e) => e.preventDefault()}
             >
               Join Room
             </Button>
