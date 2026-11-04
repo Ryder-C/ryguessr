@@ -18,6 +18,7 @@ import {
 import { Button } from "../ui/button";
 import interpolateGreatCircle from "@/lib/haversine";
 import { isConfirmKey, shouldIgnoreHotkey } from "@/lib/hotkeys";
+import { playSound, preloadSound } from "@/lib/sound";
 
 // Coordinates type
 import MapOverlayProps from "@/types/map_overlay_props";
@@ -28,10 +29,14 @@ import PlayerResults from "@/types/player-results";
 import { useGameSession } from "@/store/useSettingsStore";
 import { useAudioState } from "@/store/useSettingsStore";
 
+const MARKER_SOUND = "/audio/place-marker.mp3";
+const LOCK_SOUND = "/audio/lock-guess.mp3";
+
 const pinSvg = (color: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="${color}" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3" fill="#FFFFFF"/></svg>`;
 
-const flagSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#111827" stroke="#FFFFFF" stroke-width="2.5"/><path d="M13 26V10m0 0h9l-1.5 3.5L22 17h-9" fill="#4ade80" stroke="#4ade80" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+// A plain flag planted on the real location; the pole's foot is the anchor
+const flagSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M8 30V4h17l-4 6 4 6H8" fill="#FFFFFF" stroke="#111827" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 
 const svgUrl = (svg: string) =>
   `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
@@ -70,12 +75,9 @@ export const MapOverlay = memo(function MapOverlay({
 
   const { markerAudioEnabled, lockAudioEnabled } = useAudioState();
 
-  const markerAudio = useMemo(() => {
-    return new Audio("/audio/place-marker.mp3");
-  }, []);
-
-  const lockAudio = useMemo(() => {
-    return new Audio("/audio/lock-guess.mp3");
+  useEffect(() => {
+    preloadSound(MARKER_SOUND);
+    preloadSound(LOCK_SOUND);
   }, []);
 
   const activeIconColor = useGameSession((state) => state.activeIconColor);
@@ -97,8 +99,8 @@ export const MapOverlay = memo(function MapOverlay({
     return {
       locationIconOptions: {
         url: svgUrl(flagSvg),
-        anchor: new google.maps.Point(18, 18),
-        scaledSize: new google.maps.Size(36, 36),
+        anchor: new google.maps.Point(8, 30),
+        scaledSize: new google.maps.Size(32, 32),
       },
       mapContainerStyle: { width: "100%", height: "100%" },
     };
@@ -123,9 +125,9 @@ export const MapOverlay = memo(function MapOverlay({
       if (e.latLng) {
         setSelectedLocation({ lat: e.latLng.lat(), lng: e.latLng.lng() });
       }
-      if (markerAudioEnabled) markerAudio.play().catch(() => {});
+      if (markerAudioEnabled) playSound(MARKER_SOUND);
     },
-    [markerAudioEnabled, markerAudio],
+    [markerAudioEnabled],
   );
 
   const onLoad = useCallback((map: google.maps.Map) => {
@@ -138,8 +140,8 @@ export const MapOverlay = memo(function MapOverlay({
   const submitGuess = useCallback(() => {
     if (!selectedLocation || hasGuessed) return;
     handleGuess(selectedLocation);
-    if (lockAudioEnabled) lockAudio.play().catch(() => {});
-  }, [selectedLocation, hasGuessed, handleGuess, lockAudioEnabled, lockAudio]);
+    if (lockAudioEnabled) playSound(LOCK_SOUND);
+  }, [selectedLocation, hasGuessed, handleGuess, lockAudioEnabled]);
 
   // Space / Enter locks in the guess
   useEffect(() => {
@@ -298,7 +300,7 @@ export const MapOverlay = memo(function MapOverlay({
             <>
               Guess
               <kbd
-                className={`ml-1 rounded border border-black/20 bg-black/10 px-1.5 py-0.5 font-mono text-[0.65rem] font-medium ${compact ? "hidden" : ""}`}
+                className={`ml-1 rounded border border-white/30 bg-white/15 px-1.5 py-0.5 font-mono text-[0.65rem] font-medium ${compact ? "hidden" : ""}`}
               >
                 Space
               </kbd>

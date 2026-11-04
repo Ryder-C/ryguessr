@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Settings2, Users } from "lucide-react";
 
 import { useRoomPlayers } from "@/lib/useRoomPlayers";
@@ -20,6 +20,24 @@ export const Hud = ({ roundNumber }: { roundNumber: number }) => {
   );
   const players = useRoomPlayers();
   const [copied, setCopied] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const rosterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rosterOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rosterRef.current?.contains(e.target as Node)) setRosterOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRosterOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [rosterOpen]);
 
   const copyRoomCode = async () => {
     try {
@@ -69,37 +87,62 @@ export const Hud = ({ roundNumber }: { roundNumber: number }) => {
       </div>
 
       <div className="pointer-events-auto flex items-center gap-2">
-        <button
-          onClick={() => settingsStateActions.updateSettingsVisibility(true)}
-          title={orderedPlayers.map((p) => p.username).join(", ")}
-          className="glass flex h-10 items-center gap-2 rounded-xl pl-2 pr-3 transition-colors hover:bg-background/90"
-        >
-          <div className="flex -space-x-1.5">
-            {shownPlayers.map((player, index) => (
-              <span
-                key={player.username}
-                className={`relative flex size-6 items-center justify-center rounded-full text-[0.65rem] font-bold text-black/80 ring-2 ${player.username === username ? "ring-white" : "ring-background"}`}
-                style={{
-                  backgroundColor: player.color,
-                  zIndex: shownPlayers.length - index,
-                }}
-              >
-                {player.username.charAt(0).toUpperCase()}
-              </span>
-            ))}
-          </div>
-          {overflow > 0 && (
-            <span className="text-xs text-muted-foreground">+{overflow}</span>
+        <div ref={rosterRef} className="relative">
+          <button
+            onClick={() => setRosterOpen((open) => !open)}
+            aria-label="Players"
+            aria-expanded={rosterOpen}
+            className="glass flex h-10 items-center gap-2 rounded-xl pl-2 pr-3 transition-colors hover:bg-background/90"
+          >
+            <div className="flex -space-x-1.5">
+              {shownPlayers.map((player, index) => (
+                <span
+                  key={player.username}
+                  className={`relative flex size-6 items-center justify-center rounded-full text-[0.65rem] font-bold text-black/80 ring-2 ${player.username === username ? "ring-white" : "ring-background"}`}
+                  style={{
+                    backgroundColor: player.color,
+                    zIndex: shownPlayers.length - index,
+                  }}
+                >
+                  {player.username.charAt(0).toUpperCase()}
+                </span>
+              ))}
+            </div>
+            {overflow > 0 && (
+              <span className="text-xs text-muted-foreground">+{overflow}</span>
+            )}
+            <Users className="size-4 text-muted-foreground sm:hidden" />
+            <span className="hidden text-sm tabular-nums text-muted-foreground sm:inline">
+              {players.length} {players.length === 1 ? "player" : "players"}
+            </span>
+          </button>
+          {rosterOpen && (
+            <ul className="glass absolute top-12 right-0 flex max-h-[60dvh] w-64 max-w-[calc(100vw-1.5rem)] flex-col overflow-y-auto rounded-xl p-1.5 text-sm">
+              {orderedPlayers.map((player) => (
+                <li
+                  key={player.username}
+                  className="flex items-center gap-2.5 rounded-lg px-2 py-1.5"
+                >
+                  <span
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: player.color }}
+                  />
+                  <span className="truncate">{player.username}</span>
+                  {player.username === username && (
+                    <span className="shrink-0 text-muted-foreground">
+                      (you)
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
-          <Users className="size-4 text-muted-foreground sm:hidden" />
-          <span className="hidden text-sm tabular-nums text-muted-foreground sm:inline">
-            {players.length} {players.length === 1 ? "player" : "players"}
-          </span>
-        </button>
+        </div>
         <button
-          onClick={() =>
-            settingsStateActions.updateSettingsVisibility(!settingsVisibility)
-          }
+          onClick={() => {
+            setRosterOpen(false);
+            settingsStateActions.updateSettingsVisibility(!settingsVisibility);
+          }}
           aria-label="Settings"
           className="glass flex size-10 items-center justify-center rounded-xl transition-all hover:bg-background/90 active:scale-95"
         >
