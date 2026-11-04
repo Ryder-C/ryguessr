@@ -13,7 +13,7 @@ const GoogleMapLoader = ({ APIKEY }: { APIKEY: string }) => {
     );
   }
   if (!isLoaded) {
-    return <LoadingScreen message="Loading maps…" />;
+    return <LoadingScreen />;
   }
   return <GameView />;
 };

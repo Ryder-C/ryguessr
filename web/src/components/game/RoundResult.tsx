@@ -47,7 +47,7 @@ export const RoundResult = ({
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0, transition: { delay: 0.25, duration: 0.3 } }}
       exit={{ opacity: 0, y: 40, transition: { duration: 0.15 } }}
-      className="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 mx-auto max-w-lg short:max-w-2xl"
+      className="absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+1.75rem)] z-30 mx-auto max-w-lg short:max-w-2xl"
     >
       <div className="glass flex flex-col gap-4 rounded-2xl p-5 short:flex-row short:items-center short:gap-5 short:p-3 short:pl-5">
         <div className="flex items-baseline justify-between gap-3 short:hidden">

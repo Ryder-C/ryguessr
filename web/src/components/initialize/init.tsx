@@ -73,6 +73,6 @@ export const Init = () => {
   return responseCode == 200 && google_maps_api_key ? (
     <GoogleMapLoader APIKEY={google_maps_api_key} />
   ) : (
-    <LoadingScreen message="Connecting…" error={error} />
+    <LoadingScreen error={error} />
   );
 };

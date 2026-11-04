@@ -219,23 +219,20 @@ export const GameView = () => {
     };
   }, [mapExpanded]);
 
-  // Map container geometry for each phase of the round
+  // Map container geometry for each phase of the round. While guessing it sits above
+  // the street view's Google attribution strip instead of covering it.
   const mapContainerClass = showResults
     ? "right-0 bottom-0 w-full h-full"
     : compact
       ? mapExpanded
-        ? "right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] w-[calc(100%-1.5rem)] h-[min(70dvh,calc(100dvh-5.5rem))]"
-        : "right-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] w-36 h-28"
-      : "right-4 bottom-4 w-[22rem] h-[min(16rem,45dvh)] hover:w-[min(60vw,52rem)] hover:h-[min(65vh,36rem)] hover:delay-0 delay-300";
+        ? "right-3 bottom-[calc(env(safe-area-inset-bottom)+1.75rem)] w-[calc(100%-1.5rem)] h-[min(70dvh,calc(100dvh-7rem))]"
+        : "right-3 bottom-[calc(env(safe-area-inset-bottom)+1.75rem)] w-36 h-28"
+      : "right-4 bottom-7 w-[22rem] h-[min(16rem,45dvh)] hover:w-[min(60vw,52rem)] hover:h-[min(65vh,36rem)] hover:delay-0 delay-300";
 
   return (
     <main className="bg-black relative h-dvh w-full overflow-hidden">
       <div className="absolute inset-0 z-0">
-        {panoId ? (
-          <Streetview panoId={panoId} />
-        ) : (
-          <LoadingScreen message="Dropping you somewhere…" />
-        )}
+        {panoId ? <Streetview panoId={panoId} /> : <LoadingScreen />}
       </div>
 
       <Hud roundNumber={displayRound} />
